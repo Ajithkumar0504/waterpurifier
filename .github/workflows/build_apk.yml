@@ -24,16 +24,18 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Install Dependencies
+      - name: Scaffold & Prepare Android Scaffolding
         working-directory: ./mobile_app
-        run: flutter pub get
+        run: |
+          flutter create . --org com.califnco --project-name califnco_water
+          flutter pub get
 
       - name: Build Android APK Release
         working-directory: ./mobile_app
-        run: flutter build apk --release
+        run: flutter build apk --release --no-tree-shake-icons
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: califnco-water-purifier-release-apk
-          path: mobile_app/build/app/outputs/flutter-apk/app-release.apk
+          path: mobile_app/build/app/outputs/flutter-apk/*.apk
