@@ -24,18 +24,13 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Configure Android Gradle Environment
+      - name: Scaffold Clean Official Android Platform
         working-directory: ./mobile_app
         run: |
-          echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
-          cd android
-          gradle wrapper --gradle-version 8.5
-          chmod +x gradlew
-          cd ..
-
-      - name: Install Dependencies
-        working-directory: ./mobile_app
-        run: flutter pub get
+          rm -rf android
+          flutter create --org com.califnco --project-name waterpurifier --platforms=android .
+          sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/>\n    <application/' android/app/src/main/AndroidManifest.xml
+          flutter pub get
 
       - name: Build Android APK Release
         working-directory: ./mobile_app
