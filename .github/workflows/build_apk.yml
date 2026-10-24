@@ -24,17 +24,20 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Scaffold Clean Official Android Platform
+      - name: Scaffold & Prepare Android Scaffolding
         working-directory: ./mobile_app
         run: |
           rm -rf android
           flutter create --org com.califnco --project-name waterpurifier --platforms=android .
           sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/>\n    <application/' android/app/src/main/AndroidManifest.xml
+          # Enable MultiDex in build.gradle
+          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21\n        multiDexEnabled = true/' android/app/build.gradle
           flutter pub get
 
       - name: Build Android APK Release
         working-directory: ./mobile_app
-        run: flutter build apk --release --no-tree-shake-icons
+        run: |
+          flutter build apk --release --no-tree-shake-icons --verbose > build_output.log 2>&1 || (tail -n 120 build_output.log && exit 1)
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
