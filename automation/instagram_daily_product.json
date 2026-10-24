@@ -1,0 +1,333 @@
+{
+  "name": "Califnco Daily AI Instagram & WhatsApp Status Publisher",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 10
+            }
+          ]
+        }
+      },
+      "id": "schedule-daily",
+      "name": "Daily 10:00 AM IST Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        180,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Products",
+          "mode": "name"
+        },
+        "returnAll": true
+      },
+      "id": "read-sheet",
+      "name": "Fetch Products Catalog (Google Sheets)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        380,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all();\n// Pick next pending product or cycle through products\nconst pending = rows.find(item => String(item.json.status || '').toUpperCase() === 'PENDING') || rows[0];\nif (!pending) return [];\nreturn [{ json: pending.json }];"
+      },
+      "id": "pick-product",
+      "name": "Select Next Pending Product",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        580,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "REPLACE_WITH_GEMINI_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"You are a professional social media marketing copywriter for Califnco Water Purifiers.\\nWrite an engaging, high-converting Instagram caption for this product:\\n\\nProduct: {{ $json.product_name }}\\nFeatures: {{ $json.features }}\\nPrice: ₹{{ $json.price }}\\n\\nRequirements:\\n1. Catchy hook with water and health emojis.\\n2. 3-4 bulleted benefits.\\n3. Limited-time offer with 10% referral code 'CALIFNCO10'.\\n4. Clear Call to Action (DM us to order or visit link in bio).\\n5. 15 viral hashtags including #Califnco #WaterPurifier #ROPurifier #PureWater #HealthyLiving.\\n\\nReturn ONLY the final caption text ready to post.\"\n    }]\n  }]\n}",
+        "options": {}
+      },
+      "id": "ai-caption-gemini",
+      "name": "AI Caption & Hashtags (Google Gemini)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const product = $('Select Next Pending Product').first().json;\nconst geminiRes = $input.first().json;\nlet caption = '';\ntry {\n  caption = geminiRes.candidates[0].content.parts[0].text;\n} catch (e) {\n  caption = `💧 Pure water, pure life! Upgrade to ${product.product_name} today.\\n\\nKey Features:\\n${product.features}\\nSpecial Price: ₹${product.price}\\n\\nUse promo code CALIFNCO10 for 10% off! Link in bio.\\n\\n#Califnco #WaterPurifier #PureWater #HealthyLiving #ROFilter`;\n}\n\n// Generate AI Image URL via Pollinations AI (Free Zero-Cost Text-to-Image API)\nconst prompt = encodeURIComponent(`professional commercial product photography of ${product.product_name} water purifier on luxury kitchen countertop, cinematic lighting, crystal clear clean water glass, 8k resolution, ultra detailed, photorealistic`);\nconst aiImageUrl = `https://image.pollinations.ai/prompt/${prompt}?width=1080&height=1080&nologo=true`;\n\nreturn [{\n  json: {\n    ...product,\n    ai_caption: caption,\n    ai_image_url: aiImageUrl,\n    posted_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "format-ai-content",
+      "name": "Synthesize AI Image & Caption",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v22.0/REPLACE_WITH_IG_USER_ID/media",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "image_url",
+              "value": "={{ $json.ai_image_url }}"
+            },
+            {
+              "name": "caption",
+              "value": "={{ $json.ai_caption }}"
+            },
+            {
+              "name": "access_token",
+              "value": "REPLACE_WITH_META_ACCESS_TOKEN"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "create-ig-container",
+      "name": "Instagram: Create Media Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1240,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v22.0/REPLACE_WITH_IG_USER_ID/media_publish",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "creation_id",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "name": "access_token",
+              "value": "REPLACE_WITH_META_ACCESS_TOKEN"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "publish-ig-post",
+      "name": "Instagram: Publish Daily Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1460,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/sendImage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"session\": \"default\",\n  \"chatId\": \"status@broadcast\",\n  \"file\": {\n    \"url\": \"{{ $('Synthesize AI Image & Caption').first().json.ai_image_url }}\"\n  },\n  \"caption\": \"💧 Califnco Daily Special: {{ $('Synthesize AI Image & Caption').first().json.product_name }} at ₹{{ $('Synthesize AI Image & Caption').first().json.price }}! 100% RO Purified. DM to order.\"\n}",
+        "options": {}
+      },
+      "id": "waha-whatsapp-status",
+      "name": "WhatsApp: Publish Status (WAHA Docker)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1240,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Products",
+          "mode": "name"
+        },
+        "columnToMatchOn": "product_name",
+        "valueToMatchOn": "={{ $('Select Next Pending Product').first().json.product_name }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "POSTED"
+            },
+            {
+              "fieldId": "posted_at",
+              "fieldValue": "={{ $json.posted_at }}"
+            },
+            {
+              "fieldId": "image_url",
+              "fieldValue": "={{ $('Synthesize AI Image & Caption').first().json.ai_image_url }}"
+            }
+          ]
+        }
+      },
+      "id": "update-sheet",
+      "name": "Update Sheet: Mark as POSTED",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1680,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily 10:00 AM IST Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Products Catalog (Google Sheets)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Products Catalog (Google Sheets)": {
+      "main": [
+        [
+          {
+            "node": "Select Next Pending Product",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Next Pending Product": {
+      "main": [
+        [
+          {
+            "node": "AI Caption & Hashtags (Google Gemini)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Caption & Hashtags (Google Gemini)": {
+      "main": [
+        [
+          {
+            "node": "Synthesize AI Image & Caption",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synthesize AI Image & Caption": {
+      "main": [
+        [
+          {
+            "node": "Instagram: Create Media Container",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "WhatsApp: Publish Status (WAHA Docker)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram: Create Media Container": {
+      "main": [
+        [
+          {
+            "node": "Instagram: Publish Daily Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram: Publish Daily Post": {
+      "main": [
+        [
+          {
+            "node": "Update Sheet: Mark as POSTED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "timezone": "Asia/Kolkata",
+    "executionOrder": "v1"
+  },
+  "versionId": "califnco-full-ai-v2",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    "Califnco",
+    "AI",
+    "Instagram",
+    "WhatsApp",
+    "Gemini"
+  ]
+}
